@@ -20,9 +20,11 @@ checkpoint:
 
 data:
   train:
-    meta: data/split_9_1/train/
+    meta: data/split_9_1_seed0/train.csv
+    data_dir: ../data/train_images
   valid:
-    meta: data/split_9_1/valid/
+    meta: data/split_9_1_seed0/valid.csv
+    data_dir: ../data/train_images
 
 dataloader:
   num_workers: 6
