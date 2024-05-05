@@ -20,15 +20,9 @@ checkpoint:
 
 data:
   train:
-    speech: data/noisy_emotional/train/speech
-    noise: data/noisy_emotional/train/noise
-    tokens_dir: data/kmeans_pts/dns_emotional/
-    mix_noise: True
+    meta: data/split_9_1/train/
   valid:
-    speech: data/noisy_emotional/train/speech
-    noise: data/noisy_emotional/train/noise
-    tokens_dir: data/kmeans_pts/dns_emotional/
-    mix_noise: True
+    meta: data/split_9_1/valid/
 
 dataloader:
   num_workers: 6
