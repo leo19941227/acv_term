@@ -1,23 +1,23 @@
 expdir: ???
 last_ckpt: null
-run_valid: True
-run_train: True
-num_workers: 32
+run_valid: true
+run_train: true
+num_workers: 12
 
 trainer:
   max_steps: 100000
   log_every_n_steps: 100
   val_check_interval: ${eval:'${trainer.accumulate_grad_batches} * ${checkpoint.valid_steps}'}
   check_val_every_n_epoch: null
-  accumulate_grad_batches: 8
+  accumulate_grad_batches: 1
   accelerator: gpu
   devices: [0]
 
 checkpoint:
   save_steps: 250
   valid_steps: 500
-  valid_metric: valid/mse
-  valid_higher_better: False
+  valid_metric: valid/r2
+  valid_higher_better: true
 
 data:
   train:
@@ -30,11 +30,11 @@ data:
 dataloader:
   train:
     batch_size: 32
-    shuffle: True
+    shuffle: true
     num_workers: ${num_workers}
   valid:
     batch_size: 1
-    shuffle: False
+    shuffle: false
     num_workers: ${num_workers}
 
 collater:
@@ -43,3 +43,9 @@ collater:
 model:
   lr: 1.0e-4
   upstream_name: facebook/dinov2-base
+  num_ancillary: 163  # data-dependent
+  hidden_size: 256
+  num_head: 4
+  num_layer: 8
+  num_predict_head: 6  # data-dependent
+  upstream_trainable: false
