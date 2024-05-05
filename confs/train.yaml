@@ -2,6 +2,7 @@ expdir: ???
 last_ckpt: null
 run_valid: True
 run_train: True
+num_workers: 32
 
 trainer:
   max_steps: 100000
@@ -20,26 +21,25 @@ checkpoint:
 
 data:
   train:
-    meta: data/split_9_1_seed0/train.csv
+    csv: data/split_9_1_seed0/train.csv
     data_dir: ../data/train_images
   valid:
-    meta: data/split_9_1_seed0/valid.csv
+    csv: data/split_9_1_seed0/valid.csv
     data_dir: ../data/train_images
 
 dataloader:
-  num_workers: 6
   train:
-    batch_size: 2
+    batch_size: 32
     shuffle: True
+    num_workers: ${num_workers}
   valid:
-    batch_size: 2
+    batch_size: 1
     shuffle: False
+    num_workers: ${num_workers}
 
-collate_fn:
-  whisper_name: ${model.whisper_name}
-  mapping_mode: random
-  num_kmean_clusters: 1000
+collater:
+  upstream_name: ${model.upstream_name}
 
 model:
   lr: 1.0e-4
-  whisper_name: openai/whisper-medium
+  upstream_name: facebook/dinov2-base

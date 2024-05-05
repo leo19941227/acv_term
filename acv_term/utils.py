@@ -107,6 +107,7 @@ def parse_overrides(options: list):
     """
     revise = []
     add = []
+    assert len(options) % 2 == 0, "An option must be followed by a value."
     for position in range(0, len(options), 2):
         key = options[position].strip()
         value_str = options[position + 1].strip()
