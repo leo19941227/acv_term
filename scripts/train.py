@@ -10,6 +10,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     conf = initialize()
 
+    from ipdb import set_trace
+    set_trace()
+
     train_dataloader, valid_dataloader = make_dataloaders(conf)
     model = UnconditionalBarkSemantic(**conf["model"])
 
