@@ -1,0 +1,49 @@
+expdir: ???
+last_ckpt: null
+run_valid: True
+run_train: True
+
+trainer:
+  max_steps: 100000
+  log_every_n_steps: 100
+  val_check_interval: ${eval:'${trainer.accumulate_grad_batches} * ${checkpoint.valid_steps}'}
+  check_val_every_n_epoch: null
+  accumulate_grad_batches: 8
+  accelerator: gpu
+  devices: [0]
+
+checkpoint:
+  save_steps: 250
+  valid_steps: 500
+  valid_metric: valid/mse
+  valid_higher_better: False
+
+data:
+  train:
+    speech: data/noisy_emotional/train/speech
+    noise: data/noisy_emotional/train/noise
+    tokens_dir: data/kmeans_pts/dns_emotional/
+    mix_noise: True
+  valid:
+    speech: data/noisy_emotional/train/speech
+    noise: data/noisy_emotional/train/noise
+    tokens_dir: data/kmeans_pts/dns_emotional/
+    mix_noise: True
+
+dataloader:
+  num_workers: 6
+  train:
+    batch_size: 2
+    shuffle: True
+  valid:
+    batch_size: 2
+    shuffle: False
+
+collate_fn:
+  whisper_name: ${model.whisper_name}
+  mapping_mode: random
+  num_kmean_clusters: 1000
+
+model:
+  lr: 1.0e-4
+  whisper_name: openai/whisper-medium
