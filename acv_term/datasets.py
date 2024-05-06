@@ -1,4 +1,5 @@
 import re
+from typing import List
 from pathlib import Path
 
 import numpy as np
@@ -8,7 +9,9 @@ from torch.distributions.normal import Normal
 
 
 class PlantTraitDataset(Dataset):
-    def __init__(self, csv, data_dir, sampled_label: bool = False) -> None:
+    def __init__(
+        self, csv, data_dir, sampled_label: bool = False, label_list: List = None
+    ) -> None:
         super().__init__()
         self.df = pd.read_csv(csv)
 
@@ -16,26 +19,19 @@ class PlantTraitDataset(Dataset):
         self.sampled_label = sampled_label
 
         nonid_columns = self.df.columns[1:]
-        self.label_mean_columns = sorted(
-            [c for c in nonid_columns if re.match(r"^X\d+_mean$", c) is not None]
-        )
-        self.label_sd_columns = sorted(
-            [c for c in nonid_columns if re.match(r"^X\d+_sd$", c) is not None]
-        )
+        if label_list is not None:
+            self.label_mean_columns = sorted([f"{l}_mean" for l in label_list])
+            self.label_sd_columns = sorted([f"{l}_sd" for l in label_list])
+        else:
+            self.label_mean_columns = sorted(
+                [c for c in nonid_columns if re.match(r"^X\d+_mean$", c) is not None]
+            )
+            self.label_sd_columns = sorted(
+                [c for c in nonid_columns if re.match(r"^X\d+_sd$", c) is not None]
+            )
         self.ancillary_columns = sorted(
-            [
-                c
-                for c in nonid_columns
-                if (c not in self.label_mean_columns)
-                and (c not in self.label_sd_columns)
-            ]
+            [c for c in nonid_columns if not c.startswith("X")]
         )
-
-        assert (
-            len(self.label_mean_columns)
-            + len(self.label_sd_columns)
-            + len(self.ancillary_columns)
-        ) == len(nonid_columns)
 
     def cal_ancillary_stats(self):
         values = self.df.loc[:, self.ancillary_columns].values
