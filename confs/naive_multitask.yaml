@@ -5,7 +5,7 @@ run_train: true
 num_workers: 12
 
 trainer:
-  max_steps: 100000
+  max_steps: 3000
   log_every_n_steps: 50
   val_check_interval: ${eval:'${trainer.accumulate_grad_batches} * ${checkpoint.valid_steps}'}
   check_val_every_n_epoch: null
