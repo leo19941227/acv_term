@@ -54,6 +54,7 @@ class PlantTraitByUpstream(pl.LightningModule):
         self.register_buffer("labels_mean", labels_mean.unsqueeze(0))
         self.register_buffer("labels_std", labels_std.unsqueeze(0))
         self.valid_records = defaultdict(list)
+        self.test_records = defaultdict(list)
 
     def forward(self, images: torch.FloatTensor, ancillaries: torch.FloatTensor):
         with torch.set_grad_enabled(self.upstream_trainable):
@@ -148,6 +149,29 @@ class PlantTraitByUpstream(pl.LightningModule):
             self.log(f"valid/{name}_r2", r2, on_epoch=True)
 
         self.log(f"valid/avg_r2", r2s.mean(), on_epoch=True, prog_bar=True)
+
+    def test_step(self, batch, batch_idx):
+        _, losses, r2s, preds, labels = self.supervised_step(batch, batch_idx)
+
+        self.test_records["labels"].extend(labels.detach().cpu().unbind(dim=0))
+        self.test_records["predicts"].extend(preds.detach().cpu().unbind(dim=0))
+        self.test_records["label_names"] = batch["label_names"]
+
+    def on_test_epoch_end(self) -> None:
+        labels = torch.stack(self.test_records["labels"], dim=0)
+        predicts = torch.stack(self.test_records["predicts"], dim=0)
+        label_names = self.test_records["label_names"]
+        self.test_records = defaultdict(list)
+
+        losses = F.mse_loss(predicts, labels, reduction="none").mean(dim=0)
+        r2s = self.compute_r2(predicts, labels)
+
+        for loss, r2, name in zip(losses, r2s, label_names):
+            self.log(f"test/{name}_loss", loss, on_epoch=True)
+            self.log(f"test/{name}_r2", r2, on_epoch=True)
+
+        self.log(f"test/avg_r2", r2s.mean(), on_epoch=True, prog_bar=True)
+
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)

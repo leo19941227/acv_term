@@ -1,0 +1,57 @@
+expdir: ???
+last_ckpt: null
+run_valid: true
+run_train: true
+num_workers: 12
+
+trainer:
+  max_steps: 3000
+  log_every_n_steps: 50
+  val_check_interval: ${eval:'${trainer.accumulate_grad_batches} * ${checkpoint.valid_steps}'}
+  check_val_every_n_epoch: null
+  accumulate_grad_batches: 1
+  accelerator: gpu
+  devices: [0]
+
+checkpoint:
+  save_steps: 200
+  valid_steps: 100
+  valid_metric: valid/avg_r2
+  valid_higher_better: true
+
+data:
+  label_list: ["X4"]
+  train:
+    csv: data/split_9_1_seed0/train.csv
+    data_dir: ../data/train_images
+    label_list: ${data.label_list}
+  valid:
+    csv: data/split_9_1_seed0/valid.csv
+    data_dir: ../data/train_images
+    label_list: ${data.label_list}
+
+dataloader:
+  batch_size: 256
+  train:
+    batch_size: ${dataloader.batch_size}
+    shuffle: true
+    num_workers: ${num_workers}
+  valid:
+    batch_size: ${dataloader.batch_size}
+    shuffle: false
+    num_workers: ${num_workers}
+
+collater:
+  upstream_name: ${model.upstream_name}
+
+model:
+  lr: 1.0e-4
+  upstream_name: facebook/dinov2-base
+  num_ancillary: 163  # data-dependent
+  hidden_size: 256
+  num_head: 4
+  num_layer: 3
+  num_predict_head: ${eval:'len(${data.label_list})'}  # data-dependent
+  upstream_trainable: false
+  use_ancillaries: false
+  norm_label: true
