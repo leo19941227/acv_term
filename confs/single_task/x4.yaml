@@ -20,7 +20,7 @@ checkpoint:
   valid_higher_better: true
 
 data:
-  label_list: ["X4", "X11", "X18", "X26", "X50", "X3112"]
+  label_list: ["X4"]
   train:
     csv: data/split_9_1_seed0/train.csv
     data_dir: ../data/train_images
