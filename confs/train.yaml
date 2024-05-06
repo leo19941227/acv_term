@@ -16,7 +16,7 @@ trainer:
 checkpoint:
   save_steps: 200
   valid_steps: 100
-  valid_metric: valid/r2
+  valid_metric: valid/avg_r2
   valid_higher_better: true
 
 data:
@@ -49,5 +49,5 @@ model:
   num_layer: 3
   num_predict_head: 6  # data-dependent
   upstream_trainable: false
-  use_ancillaries: true
-  norm_label: false
+  use_ancillaries: false
+  norm_label: true
