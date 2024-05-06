@@ -119,9 +119,7 @@ class PlantTraitByUpstream(pl.LightningModule):
         )
 
         for loss, r2, name in zip(losses, r2s, batch["label_names"]):
-            self.log(
-                f"train/{name}_loss", loss, on_step=True, batch_size=bs
-            )
+            self.log(f"train/{name}_loss", loss, on_step=True, batch_size=bs)
             self.log(f"train/{name}_r2", r2, on_step=True, batch_size=bs)
 
         self.log(
@@ -139,12 +137,13 @@ class PlantTraitByUpstream(pl.LightningModule):
     def on_validation_epoch_end(self) -> None:
         labels = torch.stack(self.valid_records["labels"], dim=0)
         predicts = torch.stack(self.valid_records["predicts"], dim=0)
+        label_names = self.valid_records["label_names"]
         self.valid_records = defaultdict(list)
 
         losses = F.mse_loss(predicts, labels, reduction="none").mean(dim=0)
         r2s = self.compute_r2(predicts, labels)
 
-        for loss, r2, name in zip(losses, r2s, self.valid_records["label_names"]):
+        for loss, r2, name in zip(losses, r2s, label_names):
             self.log(f"valid/{name}_loss", loss, on_epoch=True)
             self.log(f"valid/{name}_r2", r2, on_epoch=True)
 
