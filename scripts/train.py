@@ -40,6 +40,7 @@ class Collater:
             "labels": torch.stack(
                 collated["labels"], dim=0
             ),  # (batch_size, num_labels)
+            "label_names": samples[0]["label_names"],
         }
 
 
@@ -47,13 +48,13 @@ def make_dataloaders(conf):
     train_dataset = PlantTraitDataset(**conf["data"]["train"])
     valid_dataset = PlantTraitDataset(**conf["data"]["valid"])
 
-    train_csv = pd.read_csv(conf["data"]["train"]["csv"])
-    ancillaries = torch.FloatTensor(train_csv.iloc[:, 1:-12].values)
-    ancillaries_mean = ancillaries.mean(dim=0, keepdim=True)
-    ancillaries_std = ancillaries.std(dim=0, keepdim=True)
-    labels = torch.FloatTensor(train_csv.iloc[:, -12:-6].values)
-    labels_mean = labels.mean(dim=0, keepdim=True)
-    labels_std = labels.std(dim=0, keepdim=True)
+    def make_tensor(arrays):
+        for a in arrays:
+            yield torch.FloatTensor(a)
+
+    # calculate data statistics
+    ancillaries_mean, ancillaries_std = make_tensor(train_dataset.cal_ancillary_stats())
+    labels_mean, labels_std = make_tensor(train_dataset.cal_label_stats())
 
     train_dataloader = DataLoader(
         train_dataset,

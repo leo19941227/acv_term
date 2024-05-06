@@ -25,6 +25,8 @@ class PlantTraitByUpstream(pl.LightningModule):
         ancillaries_std: torch.FloatTensor,
         labels_mean: torch.FloatTensor,
         labels_std: torch.FloatTensor,
+        use_ancillaries: bool = True,
+        norm_label: bool = False,
         lr: float = 1.0e-3,
     ) -> None:
         super().__init__()
@@ -33,6 +35,7 @@ class PlantTraitByUpstream(pl.LightningModule):
             self.upstream.requires_grad_(False)
 
         self.upstream_trainable = upstream_trainable
+        self.norm_label = norm_label
         self.lr = lr
 
         self.downstream = DownstreamModel(
@@ -43,12 +46,13 @@ class PlantTraitByUpstream(pl.LightningModule):
             num_head,
             num_layer,
             num_predict_head,
+            use_ancillaries,
             ancillaries_mean,
             ancillaries_std,
         )
 
-        self.register_buffer("labels_mean", labels_mean)
-        self.register_buffer("labels_std", labels_std)
+        self.register_buffer("labels_mean", labels_mean.unsqueeze(0))
+        self.register_buffer("labels_std", labels_std.unsqueeze(0))
         self.valid_records = defaultdict(list)
 
     def forward(self, images: torch.FloatTensor, ancillaries: torch.FloatTensor):
@@ -78,45 +82,73 @@ class PlantTraitByUpstream(pl.LightningModule):
     def compute_r2(preds: torch.FloatTensor, labels: torch.FloatTensor):
         preds = preds.detach().cpu().numpy()
         labels = labels.detach().cpu().numpy()
-        r2 = r2_score(labels, preds, multioutput="uniform_average")
+        r2 = r2_score(labels, preds, multioutput="raw_values")
+        r2 = torch.FloatTensor(r2)
         return r2
+
+    def supervised_step(self, batch, batch_idx):
+        images = batch["images"]  # (batch_size, 3, 224, 224)
+        ancillaries = batch["ancillaries"]  # (batch_size, num_anc)
+        labels = batch["labels"]  # (batch_size, num_label)
+
+        preds = self(images, ancillaries)
+
+        if self.norm_label:
+            target_labels = (labels - self.labels_mean) / (self.labels_std + 1.0e-8)
+            post_preds = preds * self.labels_std + self.labels_mean
+        else:
+            target_labels = labels
+            post_preds = preds
+
+        train_loss = (
+            F.mse_loss(preds, target_labels, reduction="none").mean(dim=0).mean(dim=0)
+        )
+        losses = F.mse_loss(post_preds, labels, reduction="none").mean(dim=0)
+        r2s = self.compute_r2(post_preds, labels)
+
+        return train_loss, losses, r2s, post_preds, labels
 
     def training_step(self, batch, batch_idx):
         self.log("global_step", self.global_step, on_step=True)
 
-        images = batch["images"]  # (batch_size, 3, 224, 224)
-        ancillaries = batch["ancillaries"]  # (batch_size, num_anc)
-        labels = batch["labels"]  # (batch_size, num_label)
-        bs = len(images)
+        train_loss, losses, r2s, preds, labels = self.supervised_step(batch, batch_idx)
+        bs = len(preds)
 
-        preds = self(images, ancillaries)
-        norm_labels = (labels - self.labels_mean) / (self.labels_std + 1.0e-8)
+        self.log(
+            f"train/train_loss", train_loss, on_step=True, prog_bar=True, batch_size=bs
+        )
 
-        mse = F.mse_loss(preds, norm_labels, reduction="none")
-        loss = mse.mean(dim=1).mean(dim=0)
+        for loss, r2, name in zip(losses, r2s, batch["label_names"]):
+            self.log(
+                f"train/{name}_loss", loss, on_step=True, batch_size=bs
+            )
+            self.log(f"train/{name}_r2", r2, on_step=True, batch_size=bs)
 
-        self.log(f"train/loss", loss, on_step=True, prog_bar=True, batch_size=bs)
-        return loss
+        self.log(
+            f"train/avg_r2", r2s.mean(), on_step=True, prog_bar=True, batch_size=bs
+        )
+        return train_loss
 
     def validation_step(self, batch, batch_idx):
-        images = batch["images"]  # (batch_size, 3, 224, 224)
-        ancillaries = batch["ancillaries"]  # (batch_size, num_anc)
-        labels = batch["labels"]  # (batch_size, num_label)
-
-        preds = self(images, ancillaries)
-        scale_preds = (preds * self.labels_std) + self.labels_mean
+        _, losses, r2s, preds, labels = self.supervised_step(batch, batch_idx)
 
         self.valid_records["labels"].extend(labels.detach().cpu().unbind(dim=0))
-        self.valid_records["predicts"].extend(scale_preds.detach().cpu().unbind(dim=0))
+        self.valid_records["predicts"].extend(preds.detach().cpu().unbind(dim=0))
+        self.valid_records["label_names"] = batch["label_names"]
 
     def on_validation_epoch_end(self) -> None:
         labels = torch.stack(self.valid_records["labels"], dim=0)
         predicts = torch.stack(self.valid_records["predicts"], dim=0)
         self.valid_records = defaultdict(list)
 
-        r2 = r2_score(labels, predicts)
+        losses = F.mse_loss(predicts, labels, reduction="none").mean(dim=0)
+        r2s = self.compute_r2(predicts, labels)
 
-        self.log(f"valid/r2", r2, on_epoch=True, prog_bar=True)
+        for loss, r2, name in zip(losses, r2s, self.valid_records["label_names"]):
+            self.log(f"valid/{name}_loss", loss, on_epoch=True)
+            self.log(f"valid/{name}_r2", r2, on_epoch=True)
+
+        self.log(f"valid/avg_r2", r2s.mean(), on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)

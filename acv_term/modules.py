@@ -50,12 +50,14 @@ class DownstreamModel(nn.Module):
         num_head: int,
         num_layer: int,
         num_predict_head: int,
+        use_ancillaries: bool,
         ancillaries_mean: torch.FloatTensor,
         ancillaries_std: torch.FloatTensor,
     ) -> None:
         super().__init__()
-        self.register_buffer("ancillaries_mean", ancillaries_mean)
-        self.register_buffer("ancillaries_std", ancillaries_std)
+        self.use_ancillaries = use_ancillaries
+        self.register_buffer("ancillaries_mean", ancillaries_mean.unsqueeze(0))
+        self.register_buffer("ancillaries_std", ancillaries_std.unsqueeze(0))
 
         self.layer_projs = nn.ModuleList(
             [
@@ -68,11 +70,12 @@ class DownstreamModel(nn.Module):
             ]
         )
 
-        self.ancillaries_proj = nn.Sequential(
-            nn.Linear(num_ancillary, hidden_size),
-            nn.GELU(),
-            nn.Linear(hidden_size, hidden_size),
-        )
+        if self.use_ancillaries:
+            self.ancillaries_proj = nn.Sequential(
+                nn.Linear(num_ancillary, hidden_size),
+                nn.GELU(),
+                nn.Linear(hidden_size, hidden_size),
+            )
 
         self.pooler_proj = nn.Sequential(
             nn.Linear(upstream_size, hidden_size),
@@ -117,19 +120,18 @@ class DownstreamModel(nn.Module):
             dim=0
         )  # (batch_size, num_patch, hidden_size)
 
-        # incoporating global information
-        ancillaries = (ancillaries - self.ancillaries_mean) / (
-            self.ancillaries_std + 1.0e-8
-        )
-        ancillaries = self.ancillaries_proj(ancillaries)
-        hs = reduced_hs + ancillaries.unsqueeze(1)
+        if self.use_ancillaries:
+            # incoporating global information
+            ancillaries = (ancillaries - self.ancillaries_mean) / (
+                self.ancillaries_std + 1.0e-8
+            )
+            ancillaries = self.ancillaries_proj(ancillaries)
+            hs = reduced_hs + ancillaries.unsqueeze(1)
 
         if pooler_output is not None:
             pooler_output = F.layer_norm(pooler_output, pooler_output.shape[-1:])
             pooler_output = self.pooler_proj(pooler_output)
             hs = hs + pooler_output.unsqueeze(1)
-
-        # add positional embedding
 
         # encode
         all_hs = [hs]

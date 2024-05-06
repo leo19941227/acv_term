@@ -6,7 +6,7 @@ num_workers: 12
 
 trainer:
   max_steps: 100000
-  log_every_n_steps: 100
+  log_every_n_steps: 50
   val_check_interval: ${eval:'${trainer.accumulate_grad_batches} * ${checkpoint.valid_steps}'}
   check_val_every_n_epoch: null
   accumulate_grad_batches: 1
@@ -49,3 +49,5 @@ model:
   num_layer: 3
   num_predict_head: 6  # data-dependent
   upstream_trainable: false
+  use_ancillaries: true
+  norm_label: false

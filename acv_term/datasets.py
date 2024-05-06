@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import numpy as np
@@ -14,13 +15,35 @@ class PlantTraitDataset(Dataset):
         self.data_dir = Path(data_dir)
         self.sampled_label = sampled_label
 
-        self.ancillary_columns = self.df.columns[1:-12]
-        self.label_mean_columns = self.df.columns[-12:-6]
-        self.label_sd_columns = self.df.columns[-6:]
-        for column in self.label_mean_columns:
-            assert column.startswith("X") and "mean" in column
-        for column in self.label_sd_columns:
-            assert column.startswith("X") and "sd" in column
+        nonid_columns = self.df.columns[1:]
+        self.label_mean_columns = sorted(
+            [c for c in nonid_columns if re.match(r"^X\d+_mean$", c) is not None]
+        )
+        self.label_sd_columns = sorted(
+            [c for c in nonid_columns if re.match(r"^X\d+_sd$", c) is not None]
+        )
+        self.ancillary_columns = sorted(
+            [
+                c
+                for c in nonid_columns
+                if (c not in self.label_mean_columns)
+                and (c not in self.label_sd_columns)
+            ]
+        )
+
+        assert (
+            len(self.label_mean_columns)
+            + len(self.label_sd_columns)
+            + len(self.ancillary_columns)
+        ) == len(nonid_columns)
+
+    def cal_ancillary_stats(self):
+        values = self.df.loc[:, self.ancillary_columns].values
+        return values.mean(axis=0), values.std(axis=0)
+
+    def cal_label_stats(self):
+        values = self.df.loc[:, self.label_mean_columns].values
+        return values.mean(axis=0), values.std(axis=0)
 
     def __len__(self):
         return len(self.df)
@@ -50,4 +73,5 @@ class PlantTraitDataset(Dataset):
             "img_path": str(img_path),
             "ancillaries": np.array(ancillaries, dtype=np.float32),
             "labels": np.array(labels, dtype=np.float32),
+            "label_names": self.label_mean_columns,
         }
